@@ -16,15 +16,12 @@ package tpmutil
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"reflect"
 	"testing"
 )
-
-func init() {
-	UseTPM12LengthPrefixSize()
-}
 
 type invalidPacked struct {
 	A []int
@@ -59,15 +56,6 @@ func testEncodingInvalidSlices(t *testing.T, f func(io.Writer, interface{}) erro
 	}
 }
 
-func TestEncodingPackedSizeInvalid(t *testing.T) {
-	f := func(w io.Writer, i interface{}) error {
-		_, err := packedSize(i)
-		return err
-	}
-
-	testEncodingInvalidSlices(t, f)
-}
-
 func TestEncodingPackTypeInvalid(t *testing.T) {
 	f := func(w io.Writer, i interface{}) error {
 		return packType(w, i)
@@ -88,28 +76,7 @@ type nestedPacked struct {
 
 type nestedSlice struct {
 	A uint32
-	S []byte
-}
-
-func TestEncodingPackedSize(t *testing.T) {
-	buf := make([]byte, 10)
-	tests := []struct {
-		in   interface{}
-		want int
-	}{
-		{uint32(3), 4},
-		{buf, 14},
-		{&buf, 14},
-		{simplePacked{137, 138}, 8},
-		{nestedPacked{simplePacked{137, 138}, 139}, 12},
-		{nestedSlice{137, buf}, 18},
-		{[]byte(nil), 4},
-	}
-	for _, tt := range tests {
-		if s, err := packedSize(tt.in); err != nil || s != tt.want {
-			t.Errorf("packedSize(%#v): %d, want %d", tt.in, s, tt.want)
-		}
-	}
+	S U32Bytes
 }
 
 func TestEncodingPackType(t *testing.T) {
@@ -136,8 +103,8 @@ func TestEncodingPackTypeWriteFail(t *testing.T) {
 		limit int
 		in    interface{}
 	}{
-		{4, []byte{1}},
-		{3, []byte(nil)},
+		{4, U32Bytes([]byte{1})},
+		{3, U32Bytes([]byte(nil))},
 	}
 	for _, tt := range tests {
 		if err := packType(&limitedDiscard{tt.limit}, tt.in); err == nil {
@@ -247,9 +214,69 @@ func TestEncodingInvalidUnpack(t *testing.T) {
 
 }
 
+func TestSelfMarshaler(t *testing.T) {
+	var b U32Bytes
+	// The slice ui represents uint32(0), which is the length of an empty byte array.
+	ui := []byte{0, 0, 0, 0}
+	uiBuf := bytes.NewBuffer(ui)
+	if err := UnpackBuf(uiBuf, &b); err != nil {
+		t.Fatal("UnpackBuf failed to unpack the empty byte array")
+	}
+	pb, err := Pack(&b)
+	if err != nil {
+		t.Fatalf("Pack failed on U32Bytes")
+	}
+	if !bytes.Equal(pb, ui) {
+		t.Fatal("Pack failed to pack U32Bytes properly:", pb)
+	}
+
+	// A byte slice of length 1 with a single entry: b[0] == 137
+	ui2 := []byte{0, 0, 0, 1, 137}
+	uiBuf2 := bytes.NewBuffer(ui2)
+	if err := UnpackBuf(uiBuf2, &b); err != nil {
+		t.Fatal("UnpackBuf failed to unpack a byte array with a single value in it")
+	}
+	pb2, err := Pack(&b)
+	if err != nil {
+		t.Fatalf("Pack failed on U32Bytes")
+	}
+	if !bytes.Equal(pb2, ui2) {
+		t.Fatal("Pack failed to pack U32Bytes properly:", pb2)
+	}
+
+	var b2 U16Bytes
+	// The slice ui represents uint16(0), which is the length of an empty byte array.
+	ui3 := []byte{0, 0}
+	uiBuf3 := bytes.NewBuffer(ui3)
+	if err := UnpackBuf(uiBuf3, &b2); err != nil {
+		t.Fatal("UnpackBuf failed to unpack the empty byte array")
+	}
+	pb3, err := Pack(&b2)
+	if err != nil {
+		t.Fatalf("Pack failed on U16Bytes")
+	}
+	if !bytes.Equal(pb3, ui3) {
+		t.Fatal("Pack failed to pack U16Bytes properly:", pb3)
+	}
+
+	// A byte slice of length 1 with a single entry: b[0] == 137
+	ui4 := []byte{0, 1, 137}
+	uiBuf4 := bytes.NewBuffer(ui4)
+	if err := UnpackBuf(uiBuf4, &b2); err != nil {
+		t.Fatal("UnpackBuf failed to unpack a byte array with a single value in it")
+	}
+	pb4, err := Pack(&b2)
+	if err != nil {
+		t.Fatalf("Pack failed on U16Bytes")
+	}
+	if !bytes.Equal(pb4, ui4) {
+		t.Fatal("Pack failed to pack U16Bytes properly:", pb4)
+	}
+}
+
 func TestEncodingUnpack(t *testing.T) {
 	// Deserialize the empty byte array.
-	var b []byte
+	var b U32Bytes
 	// The slice ui represents uint32(0), which is the length of an empty byte array.
 	ui := []byte{0, 0, 0, 0}
 	uiBuf := bytes.NewBuffer(ui)
@@ -264,7 +291,7 @@ func TestEncodingUnpack(t *testing.T) {
 		t.Fatal("UnpackBuf failed to unpack a byte array with a single value in it")
 	}
 
-	if !bytes.Equal(b, []byte{137}) {
+	if !bytes.Equal([]byte(b), []byte{137}) {
 		t.Fatal("UnpackBuf unpacked a small byte array incorrectly")
 	}
 
@@ -306,6 +333,7 @@ func TestEncodingUnpack(t *testing.T) {
 		t.Fatal("Couldn't pack a struct with a nested byte slice:", err)
 	}
 	var ns2 nestedSlice
+	fmt.Printf("%#v\n", bns)
 	if _, err := Unpack(bns, &ns2); err != nil {
 		t.Fatal("Couldn't unpacked a struct with a nested slice:", err)
 	}
