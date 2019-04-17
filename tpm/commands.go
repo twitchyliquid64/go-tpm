@@ -150,7 +150,7 @@ func getCapability(rw io.ReadWriter, cap, subcap uint32) ([]byte, error) {
 		return nil, err
 	}
 	var b tpmutil.U32Bytes
-	in := []interface{}{cap, subCapBytes}
+	in := []interface{}{cap, tpmutil.U32Byte(subCapBytes)}
 	out := []interface{}{&b}
 	if _, err := submitTPMRequest(rw, tagRQUCommand, ordGetCapability, in, out); err != nil {
 		return nil, err
