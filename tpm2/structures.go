@@ -697,7 +697,7 @@ func decodeQuoteInfo(in *bytes.Buffer) (*QuoteInfo, error) {
 // IDObject represents an encrypted credential bound to a TPM object.
 type IDObject struct {
 	IntegrityHMAC tpmutil.U16Bytes
-	EncIdentity   tpmutil.U16Bytes
+	EncIdentity   tpmutil.RawBytes
 }
 
 // Encode packs the IDObject into a byte stream representing
@@ -705,11 +705,11 @@ type IDObject struct {
 func (o *IDObject) Encode() ([]byte, error) {
 	// encIdentity is packed raw, as the bytes representing the size
 	// of the credential value are present within the encrypted blob.
-	d, err := tpmutil.Pack(o.IntegrityHMAC, tpmutil.RawBytes(o.EncIdentity))
+	d, err := tpmutil.Pack(o.IntegrityHMAC, o.EncIdentity)
 	if err != nil {
 		return nil, fmt.Errorf("encoding IntegrityHMAC, EncIdentity: %v", err)
 	}
-	return tpmutil.Pack(d)
+	return tpmutil.Pack(tpmutil.U16Bytes(d))
 }
 
 // CreationData describes the attributes and environment for an object created
