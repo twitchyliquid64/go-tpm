@@ -75,7 +75,7 @@ func seal(rw io.ReadWriter, sc *sealCommand, pcrs *pcrInfoLong, data []byte, ca 
 
 	// TODO(tmroeder): special-case pcrInfoLong in pack/unpack so we don't have
 	// to write out the length explicitly here.
-	in := []interface{}{sc, uint32(pcrsize), pcrs, data, ca}
+	in := []interface{}{sc, uint32(pcrsize), pcrs, tpmutil.U32Bytes(data), ca}
 
 	var tsd tpmStoredData
 	var ra responseAuth
@@ -91,7 +91,7 @@ func seal(rw io.ReadWriter, sc *sealCommand, pcrs *pcrInfoLong, data []byte, ca 
 // unseal data sealed by the TPM.
 func unseal(rw io.ReadWriter, keyHandle tpmutil.Handle, sealed *tpmStoredData, ca1 *commandAuth, ca2 *commandAuth) ([]byte, *responseAuth, *responseAuth, uint32, error) {
 	in := []interface{}{keyHandle, sealed, ca1, ca2}
-	var outb []byte
+	var outb tpmutil.U32Bytes
 	var ra1 responseAuth
 	var ra2 responseAuth
 	out := []interface{}{&outb, &ra1, &ra2}
@@ -149,7 +149,7 @@ func getCapability(rw io.ReadWriter, cap, subcap uint32) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	var b []byte
+	var b tpmutil.U32Bytes
 	in := []interface{}{cap, subCapBytes}
 	out := []interface{}{&b}
 	if _, err := submitTPMRequest(rw, tagRQUCommand, ordGetCapability, in, out); err != nil {
@@ -159,7 +159,7 @@ func getCapability(rw io.ReadWriter, cap, subcap uint32) ([]byte, error) {
 }
 
 func nvReadValue(rw io.ReadWriter, index, offset, len uint32, ca *commandAuth) ([]byte, *responseAuth, uint32, error) {
-	var b []byte
+	var b tpmutil.U32Bytes
 	var ra responseAuth
 	in := []interface{}{index, offset, len, ca}
 	out := []interface{}{&b, &ra}
@@ -179,8 +179,8 @@ func quote2(rw io.ReadWriter, keyHandle tpmutil.Handle, hash [20]byte, pcrs *pcr
 	in := []interface{}{keyHandle, hash, pcrs, addVersion, ca}
 	var pcrShort pcrInfoShort
 	var capInfo capVersionInfo
-	var capBytes []byte
-	var sig []byte
+	var capBytes tpmutil.U32Bytes
+	var sig tpmutil.U32Bytes
 	var ra responseAuth
 	out := []interface{}{&pcrShort, &capBytes, &sig, &ra}
 	ret, err := submitTPMRequest(rw, tagRQUAuth1Command, ordQuote2, in, out)
@@ -209,7 +209,7 @@ func quote2(rw io.ReadWriter, keyHandle tpmutil.Handle, hash [20]byte, pcrs *pcr
 func quote(rw io.ReadWriter, keyHandle tpmutil.Handle, hash [20]byte, pcrs *pcrSelection, ca *commandAuth) (*pcrComposite, []byte, *responseAuth, uint32, error) {
 	in := []interface{}{keyHandle, hash, pcrs, ca}
 	var pcrc pcrComposite
-	var sig []byte
+	var sig tpmutil.U32Bytes
 	var ra responseAuth
 	out := []interface{}{&pcrc, &sig, &ra}
 	ret, err := submitTPMRequest(rw, tagRQUAuth1Command, ordQuote, in, out)
@@ -225,7 +225,7 @@ func quote(rw io.ReadWriter, keyHandle tpmutil.Handle, hash [20]byte, pcrs *pcrS
 func makeIdentity(rw io.ReadWriter, encAuth digest, idDigest digest, k *key, ca1 *commandAuth, ca2 *commandAuth) (*key, []byte, *responseAuth, *responseAuth, uint32, error) {
 	in := []interface{}{encAuth, idDigest, k, ca1, ca2}
 	var aik key
-	var sig []byte
+	var sig tpmutil.U32Bytes
 	var ra1 responseAuth
 	var ra2 responseAuth
 	out := []interface{}{&aik, &sig, &ra1, &ra2}
@@ -240,7 +240,7 @@ func makeIdentity(rw io.ReadWriter, encAuth digest, idDigest digest, k *key, ca1
 // activateIdentity provides the TPM with an EK encrypted challenge and asks it to
 // decrypt the challenge and return the secret (symmetric key).
 func activateIdentity(rw io.ReadWriter, keyHandle tpmutil.Handle, blob []byte, ca1 *commandAuth, ca2 *commandAuth) (*symKey, *responseAuth, *responseAuth, uint32, error) {
-	in := []interface{}{keyHandle, blob, ca1, ca2}
+	in := []interface{}{keyHandle, tpmutil.U32Bytes(blob), ca1, ca2}
 	var symkey symKey
 	var ra1 responseAuth
 	var ra2 responseAuth
@@ -318,7 +318,7 @@ func ownerClear(rw io.ReadWriter, ca *commandAuth) (*responseAuth, uint32, error
 // TPM can be put into this state using TPM_OwnerClear. The encOwnerAuth and
 // encSRKAuth values must be encrypted using the endorsement key.
 func takeOwnership(rw io.ReadWriter, encOwnerAuth []byte, encSRKAuth []byte, srk *key, ca *commandAuth) (*key, *responseAuth, uint32, error) {
-	in := []interface{}{pidOwner, encOwnerAuth, encSRKAuth, srk, ca}
+	in := []interface{}{pidOwner, tpmutil.U32Bytes(encOwnerAuth), tpmutil.U32Bytes(encSRKAuth), srk, ca}
 	var k key
 	var ra responseAuth
 	out := []interface{}{&k, &ra}
@@ -345,8 +345,8 @@ func createWrapKey(rw io.ReadWriter, encUsageAuth digest, encMigrationAuth diges
 }
 
 func sign(rw io.ReadWriter, keyHandle tpmutil.Handle, data []byte, ca *commandAuth) ([]byte, *responseAuth, uint32, error) {
-	in := []interface{}{keyHandle, data, ca}
-	var signature []byte
+	in := []interface{}{keyHandle, tpmutil.U32Bytes(data), ca}
+	var signature tpmutil.U32Bytes
 	var ra responseAuth
 	out := []interface{}{&signature, &ra}
 	ret, err := submitTPMRequest(rw, tagRQUAuth1Command, ordSign, in, out)

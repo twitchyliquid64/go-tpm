@@ -16,7 +16,6 @@ package tpmutil
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"reflect"
@@ -336,7 +335,6 @@ func TestEncodingUnpack(t *testing.T) {
 		t.Fatal("Couldn't pack a struct with a nested byte slice:", err)
 	}
 	var ns2 nestedSlice
-	fmt.Printf("%#v\n", bns)
 	if _, err := Unpack(bns, &ns2); err != nil {
 		t.Fatal("Couldn't unpacked a struct with a nested slice:", err)
 	}

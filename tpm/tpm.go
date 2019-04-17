@@ -93,7 +93,7 @@ func FetchPCRValues(rw io.ReadWriter, pcrVals []int) ([]byte, error) {
 
 // GetRandom gets random bytes from the TPM.
 func GetRandom(rw io.ReadWriter, size uint32) ([]byte, error) {
-	var b []byte
+	var b tpmutil.U32Bytes
 	in := []interface{}{size}
 	out := []interface{}{&b}
 	// There's no need to check the ret value here, since the err value
