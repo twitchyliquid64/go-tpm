@@ -122,6 +122,10 @@ type responseHeader struct {
 // A Handle is a reference to a TPM object.
 type Handle uint32
 
+// TODO(jsonp): Refactor use of *[]Handle to its own type, so special-case
+// logic can be moved out of unpackValue() & instead the new type can
+// implement SelfMarshaler.
+
 // SelfMarshaler allows custom types to override default encoding/decoding
 // behavior in Pack, Unpack and UnpackBuf.
 type SelfMarshaler interface {

@@ -99,12 +99,15 @@ func TestEncodingPackType(t *testing.T) {
 }
 
 func TestEncodingPackTypeWriteFail(t *testing.T) {
+	u32WithOneByte := U32Bytes([]byte{1})
+	u32Empty := U32Bytes([]byte(nil))
+
 	tests := []struct {
 		limit int
 		in    interface{}
 	}{
-		{4, U32Bytes([]byte{1})},
-		{3, U32Bytes([]byte(nil))},
+		{4, &u32WithOneByte},
+		{3, &u32Empty},
 	}
 	for _, tt := range tests {
 		if err := packType(&limitedDiscard{tt.limit}, tt.in); err == nil {
@@ -190,11 +193,11 @@ func TestEncodingInvalidUnpack(t *testing.T) {
 		t.Fatal("UnpackBuf incorrectly deserialized into a non pointer")
 	}
 
-	var b []byte
+	var b U32Bytes
 	var empty []byte
 	emptyBuf := bytes.NewBuffer(empty)
 	if err := UnpackBuf(emptyBuf, &b); err == nil {
-		t.Fatal("UnpackBuf incorrectly deserialized an empty byte array into a byte slice")
+		t.Fatal("UnpackBuf incorrectly deserialized an empty byte array into U32Bytes")
 	}
 
 	// Try to deserialize a byte array that has a length but not enough bytes.
@@ -328,7 +331,7 @@ func TestEncodingUnpack(t *testing.T) {
 	}
 
 	ns := nestedSlice{137, b}
-	bns, err := Pack(ns)
+	bns, err := Pack(&ns)
 	if err != nil {
 		t.Fatal("Couldn't pack a struct with a nested byte slice:", err)
 	}
@@ -338,6 +341,8 @@ func TestEncodingUnpack(t *testing.T) {
 		t.Fatal("Couldn't unpacked a struct with a nested slice:", err)
 	}
 	if ns.A != ns2.A || !bytes.Equal(ns.S, ns2.S) {
+		t.Logf("orginal = %+v", ns)
+		t.Logf("decoded = %+v", ns2)
 		t.Fatal("Unpacked struct with nested slice didn't match the original")
 	}
 
@@ -375,5 +380,21 @@ func TestPartialUnpack(t *testing.T) {
 
 	if read1+read2 != len(buf) {
 		t.Errorf("sum of bytes read doesn't ad up to total packed size: got %d+%d=%d, want %d", read1, read2, read1+read2, len(buf))
+	}
+}
+
+func TestUnpackHandlesArea(t *testing.T) {
+	buf := []byte{
+		0, 2,
+		0, 0, 0, 1,
+		0, 0, 5, 57,
+	}
+	var out []Handle
+
+	if _, err := Unpack(buf, &out); err != nil {
+		t.Fatalf("Unpack(%v, %T) failed: %v", buf, &out, err)
+	}
+	if want := []Handle{1, 1337}; !reflect.DeepEqual(out, want) {
+		t.Errorf("Unpack(%v, %T): %T = %v, want %v", buf, &out, out, out, want)
 	}
 }

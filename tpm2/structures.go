@@ -214,7 +214,7 @@ func decodeRSAParams(in *bytes.Buffer) (*RSAParams, error) {
 	if params.Sign, err = decodeSigScheme(in); err != nil {
 		return nil, fmt.Errorf("decoding Sign: %v", err)
 	}
-	var modBytes []byte
+	var modBytes tpmutil.U16Bytes
 	if err := tpmutil.UnpackBuf(in, &params.KeyBits, &params.Exponent, &modBytes); err != nil {
 		return nil, fmt.Errorf("decoding KeyBits, Exponent, Modulus: %v", err)
 	}
@@ -276,7 +276,8 @@ func (p *ECCParams) encode() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("encoding KDF: %v", err)
 	}
-	point, err := tpmutil.Pack(p.Point.x().Bytes(), p.Point.y().Bytes())
+	x, y := p.Point.x().Bytes(), p.Point.y().Bytes()
+	point, err := tpmutil.Pack(tpmutil.U16Bytes(x), tpmutil.U16Bytes(y))
 	if err != nil {
 		return nil, fmt.Errorf("encoding Point: %v", err)
 	}
@@ -299,7 +300,7 @@ func decodeECCParams(in *bytes.Buffer) (*ECCParams, error) {
 	if params.KDF, err = decodeKDFScheme(in); err != nil {
 		return nil, fmt.Errorf("decoding KDF: %v", err)
 	}
-	var x, y []byte
+	var x, y tpmutil.U16Bytes
 	if err := tpmutil.UnpackBuf(in, &x, &y); err != nil {
 		return nil, fmt.Errorf("decoding Point: %v", err)
 	}
@@ -467,7 +468,7 @@ func decodeSignature(in *bytes.Buffer) (*Signature, error) {
 		}
 	case AlgECDSA:
 		sig.ECC = new(SignatureECC)
-		var r, s []byte
+		var r, s tpmutil.U16Bytes
 		if err := tpmutil.UnpackBuf(in, &sig.ECC.HashAlg, &r, &s); err != nil {
 			return nil, fmt.Errorf("decoding ECC: %v", err)
 		}
@@ -788,7 +789,7 @@ type Name struct {
 }
 
 func decodeName(in *bytes.Buffer) (*Name, error) {
-	var nameBuf []byte
+	var nameBuf tpmutil.U16Bytes
 	if err := tpmutil.UnpackBuf(in, &nameBuf); err != nil {
 		return nil, err
 	}
@@ -827,7 +828,7 @@ func (n Name) encode() ([]byte, error) {
 	default:
 		// Name is empty, which is valid.
 	}
-	return tpmutil.Pack(buf)
+	return tpmutil.Pack(tpmutil.U16Bytes(buf))
 }
 
 // MatchesPublic compares Digest in Name against given Public structure. Note:
@@ -867,7 +868,7 @@ func decodeHashValue(in *bytes.Buffer) (*HashValue, error) {
 	if !ok {
 		return nil, fmt.Errorf("unsupported hash algorithm type 0x%x", hv.Alg)
 	}
-	hv.Value = make([]byte, hfn().Size())
+	hv.Value = make(tpmutil.U16Bytes, hfn().Size())
 	if _, err := in.Read(hv.Value); err != nil {
 		return nil, fmt.Errorf("decoding Value: %v", err)
 	}
